@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudvault-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudvault-backend
+  template:
+    metadata:
+      labels:
+        app: cloudvault-backend
+    spec:
+      containers:
+        - name: backend
+          image: cloudvault-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudvault-db-secret
+                  key: POSTGRES_PASSWORD
+
+            - name: DATABASE_URL
+              value: postgresql://postgres:$(POSTGRES_PASSWORD)@cloudvault-db:5432/cloudvault
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 10

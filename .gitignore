@@ -1,0 +1,9 @@
+﻿.env
+.env.*
+!.env.example
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.pytest_cache/
+backend/storage/documents/*
+k8s/secret.yaml
