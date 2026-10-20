@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: cloudvault-backend:latest
-          imagePullPolicy: IfNotPresent
+          image: codecurious06/cloudvault-backend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
           env:

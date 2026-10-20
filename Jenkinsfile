@@ -2,11 +2,12 @@ pipeline {
     agent any
 
     environment {
-        DATABASE_URL = 'postgresql://postgres:cloudvault123@localhost:5432/cloudvault'
+        DOCKER_IMAGE = 'codecurious06/cloudvault-backend'
+        KUBECONFIG = 'C:\\Users\\Sonakshi\\.kube\\config'
+        DOCKER_PATH = 'C:\\Users\\Sonakshi\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin'
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -18,7 +19,7 @@ pipeline {
             steps {
                 dir('backend') {
                     bat 'python -m pip install -r requirements.txt'
-                    bat 'python -m pytest tests/test_app.py -k test_health'
+                    bat 'python -m pytest -v'
                 }
             }
         }
@@ -26,7 +27,7 @@ pipeline {
         stage('Frontend Build') {
             steps {
                 dir('frontend') {
-                    bat 'npm install'
+                    bat 'npm ci'
                     bat 'npm run build'
                 }
             }
@@ -35,27 +36,53 @@ pipeline {
         stage('Docker Build') {
             steps {
                 bat '''
-                    set "PATH=C:\\Users\\Sonakshi\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
-                    docker --version
-                    docker build -t cloudvault-backend:latest backend
+                    set "PATH=%DOCKER_PATH%;%PATH%"
+                    docker build -t %DOCKER_IMAGE%:%BUILD_NUMBER% backend
+                    docker tag %DOCKER_IMAGE%:%BUILD_NUMBER% %DOCKER_IMAGE%:latest
                 '''
+            }
+        }
+
+        stage('Docker Hub Push') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DH_USER',
+                        passwordVariable: 'DH_TOKEN'
+                    )
+                ]) {
+                    bat '''
+                        @echo off
+                        set "PATH=%DOCKER_PATH%;%PATH%"
+                        echo %DH_TOKEN%| docker login --username "%DH_USER%" --password-stdin
+                        if errorlevel 1 exit /b 1
+
+                        docker push %DOCKER_IMAGE%:%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        docker push %DOCKER_IMAGE%:latest
+                        if errorlevel 1 exit /b 1
+
+                        docker logout
+                    '''
+                }
             }
         }
 
         stage('Kubernetes Deploy') {
             steps {
                 bat '''
-                    set "PATH=C:\\Users\\Sonakshi\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
-                    set "KUBECONFIG=C:\\Users\\Sonakshi\\.kube\\config"
+                    set "PATH=%DOCKER_PATH%;%PATH%"
+                    set "KUBECONFIG=%KUBECONFIG%"
 
-                    kubectl version --client
                     kubectl config use-context docker-desktop
+                    kubectl apply -f k8s/postgres.yaml
+                    kubectl apply -f k8s/backend.yaml
+                    kubectl apply -f k8s/backend-service.yaml
 
-                    kubectl create secret generic cloudvault-db-secret --from-literal=POSTGRES_PASSWORD=cloudvault123 --dry-run=client -o yaml | kubectl apply -f - --validate=false
-
-                    kubectl apply -f k8s/postgres.yaml --validate=false
-                    kubectl apply -f k8s/backend.yaml --validate=false
-                    kubectl apply -f k8s/backend-service.yaml --validate=false
+                    kubectl set image deployment/cloudvault-backend backend=%DOCKER_IMAGE%:%BUILD_NUMBER%
+                    kubectl rollout status deployment/cloudvault-backend --timeout=180s
                 '''
             }
         }
@@ -63,11 +90,11 @@ pipeline {
         stage('Verify') {
             steps {
                 bat '''
-                    set "PATH=C:\\Users\\Sonakshi\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin;%PATH%"
-                    set "KUBECONFIG=C:\\Users\\Sonakshi\\.kube\\config"
-
+                    set "PATH=%DOCKER_PATH%;%PATH%"
                     kubectl get pods
                     kubectl get services
+                    kubectl get deployment cloudvault-backend
+                    kubectl get deployment cloudvault-backend -o jsonpath="{.spec.template.spec.containers[0].image}"
                 '''
             }
         }
@@ -77,9 +104,8 @@ pipeline {
         success {
             echo 'CloudVault CI/CD pipeline completed successfully!'
         }
-
         failure {
-            echo 'CloudVault pipeline failed.'
+            echo 'CloudVault pipeline failed. Check the failed stage logs.'
         }
     }
 }
