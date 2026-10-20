@@ -11,17 +11,22 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
-    "DATABASE_URL"
-).replace(
-    "postgresql://",
-    "postgresql+psycopg2://"
-)
+# Database configuration
+database_url = os.getenv("DATABASE_URL")
 
+if database_url:
+    database_url = database_url.replace(
+        "postgresql://",
+        "postgresql+psycopg2://",
+        1
+    )
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
+# File storage configuration
 UPLOAD_FOLDER = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "storage",
@@ -33,6 +38,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 
+# Database model
 class Document(db.Model):
     __tablename__ = "documents"
 
@@ -71,10 +77,7 @@ class Document(db.Model):
     )
 
 
-# -------------------------
-# Home
-# -------------------------
-
+# Home route
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
@@ -82,10 +85,7 @@ def home():
     })
 
 
-# -------------------------
-# Health Check
-# -------------------------
-
+# Health check
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({
@@ -94,10 +94,7 @@ def health():
     })
 
 
-# -------------------------
-# Upload Document
-# -------------------------
-
+# Upload document
 @app.route("/api/documents/upload", methods=["POST"])
 def upload_document():
 
@@ -147,10 +144,7 @@ def upload_document():
     }), 201
 
 
-# -------------------------
-# Get All Documents
-# -------------------------
-
+# Get all documents
 @app.route("/api/documents", methods=["GET"])
 def get_documents():
 
@@ -170,8 +164,14 @@ def get_documents():
         for document in documents
     ])
 
-@app.route("/api/documents/<int:document_id>/download", methods=["GET"])
+
+# Download document
+@app.route(
+    "/api/documents/<int:document_id>/download",
+    methods=["GET"]
+)
 def download_document(document_id):
+
     document = Document.query.get_or_404(document_id)
 
     if not os.path.exists(document.file_path):
@@ -186,8 +186,11 @@ def download_document(document_id):
         mimetype=document.content_type
     )
 
+
+# Delete document
 @app.route("/api/documents/<int:document_id>", methods=["DELETE"])
 def delete_document(document_id):
+
     document = Document.query.get_or_404(document_id)
 
     if os.path.exists(document.file_path):
@@ -201,11 +204,14 @@ def delete_document(document_id):
         "document_id": document_id
     })
 
-# -------------------------
-# Start Application
-# -------------------------
 
+# Start application
 if __name__ == "__main__":
+
+    if not app.config["SQLALCHEMY_DATABASE_URI"]:
+        raise RuntimeError(
+            "DATABASE_URL is required to start CloudVault."
+        )
 
     with app.app_context():
         db.create_all()
@@ -213,5 +219,5 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=True
+        debug=False
     )
