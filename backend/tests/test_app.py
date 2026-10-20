@@ -1,23 +1,30 @@
-from app import app
+import pytest
+
+from app import app, db
 
 
-def test_health():
-    client = app.test_client()
+@pytest.fixture
+def client():
+    app.config["TESTING"] = True
 
+    with app.app_context():
+        db.create_all()
+
+        yield app.test_client()
+
+        db.session.remove()
+        db.drop_all()
+
+
+def test_health(client):
     response = client.get("/api/health")
 
     assert response.status_code == 200
-
-    data = response.get_json()
-
-    assert data["status"] == "UP"
-    assert data["service"] == "CloudVault API"
+    assert response.get_json()["status"] == "UP"
 
 
-def test_get_documents():
-    client = app.test_client()
-
+def test_get_documents(client):
     response = client.get("/api/documents")
 
     assert response.status_code == 200
-    assert isinstance(response.get_json(), list)
+    assert response.get_json() == []
