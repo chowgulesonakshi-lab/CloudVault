@@ -1,4 +1,4 @@
-# ☁️ CloudVault — Document Management Platform
+# ☁️ CloudVault- Document Management Platform
 
 A full-stack document management platform built to simplify file storage, organization, and retrieval through a modern web interface and a RESTful backend. CloudVault combines **React, Flask, PostgreSQL, Docker, Kubernetes, and Jenkins** to demonstrate containerization, persistent metadata storage, deployment orchestration, and CI/CD automation.
 
